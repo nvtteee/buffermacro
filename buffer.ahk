@@ -627,10 +627,34 @@ quickaddkeys(keys)
 }
 
 capturekey:
-    GuiControl, Settings:, capturebtn, Press any key now...
-    Input, capturedkey, L1 M,, {Enter}{Escape}
-    if (ErrorLevel = "Max")
+    GuiControl, Settings:, capturebtn, Press any key or click...
+    capturedkey := ""
+    capturewait := true
+    Hotkey, ~LButton, capturemouse, On
+    Hotkey, ~RButton, capturemouse, On
+    Hotkey, ~MButton, capturemouse, On
+    ih := InputHook("L1 T5")
+    ih.Start()
+    ih.Wait()
+    Hotkey, ~LButton, capturemouse, Off
+    Hotkey, ~RButton, capturemouse, Off
+    Hotkey, ~MButton, capturemouse, Off
+    if (capturedkey = "")
     {
+        if (ih.Input != "")
+            capturedkey := ih.Input
+        else if (ih.EndKey != "")
+            capturedkey := ih.EndKey
+    }
+    if (capturedkey != "")
+    {
+        if (capturedkey = togglekey)
+        {
+            GuiControl, Settings:, capturebtn, Click then press a key...
+            forcealwaysontop()
+            MsgBox, 48, Conflict, That key is your toggle key.
+            return
+        }
         isdupe := false
         for index, key in keylist
         {
@@ -639,13 +663,6 @@ capturekey:
                 isdupe := true
                 break
             }
-        }
-      if (capturedkey = togglekey)
-        {
-            GuiControl, Settings:, capturebtn, Click then press a key...
-            forcealwaysontop()
-            MsgBox, 48, Conflict, That key is your toggle key.
-            return
         }
         if (!isdupe)
         {
@@ -663,6 +680,13 @@ capturekey:
     {
         GuiControl, Settings:, capturebtn, Click then press a key...
     }
+    return
+
+capturemouse:
+    mousebtn := A_ThisHotkey
+    mousebtn := StrReplace(mousebtn, "~", "")
+    capturedkey := mousebtn
+    ih.Stop()
     return
 
 importnow:

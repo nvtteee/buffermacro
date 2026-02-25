@@ -63,7 +63,7 @@ spamkeys:
         {
             for index, key in keylist
             {
-                if (key = "LButton" or key = "RButton")
+                if (key = "LButton" or key = "RButton" or key = "MButton")
                     continue
                 if (key = "CapsLock")
                     checkkey := "CapsLock"
@@ -149,6 +149,42 @@ global rightbuttonpressed := false
 *~RButton Up::
     rightbuttonpressed := false
     return
+    
+    global middlebuttonpressed := false
+
+*~MButton::
+    middlebuttonpressed := true
+    hasmbutton := false
+    for index, key in keylist
+    {
+        if (key = "MButton")
+        {
+            hasmbutton := true
+            break
+        }
+    }
+    if (hasmbutton)
+    {
+        while (middlebuttonpressed)
+        {
+            IfWinActive, ahk_exe RobloxPlayerBeta.exe
+            {
+                if (togglekeys)
+                {
+                    Click, Middle
+                    Sleep, 4
+                }
+                else
+                    break
+            }
+        }
+    }
+    return
+
+*~MButton Up::
+    middlebuttonpressed := false
+    return
+
 
 buildstatusbox()
 {
@@ -278,6 +314,8 @@ showsettingsgui:
             displayname := "Left Click"
         else if (key = "RButton")
             displayname := "Right Click"
+        else if (key = "MButton")
+            displayname := "Middle Click"
         LV_Add("", index . ".  " . displayname)
     }
 
@@ -297,6 +335,7 @@ showsettingsgui:
     Gui, Settings:Add, Button, x410 y275 w45 h25 gquickadd4, ZXCV
     Gui, Settings:Add, Button, x230 y305 w55 h25 gaddlclick, LMB
     Gui, Settings:Add, Button, x290 y305 w55 h25 gaddlrclick, RMB
+    Gui, Settings:Add, Button, x350 y305 w55 h25 gaddmclick, MMB
 
     Gui, Settings:Font, s10 cWhite Normal
     Gui, Settings:Add, Text, x230 y340, Or press a key:
@@ -558,6 +597,11 @@ quickadd4:
 
 addlrclick:
     quickaddkeys(["RButton"])
+    GoSub, showsettingsgui
+    return
+
+addmclick:
+    quickaddkeys(["MButton"])
     GoSub, showsettingsgui
     return
 

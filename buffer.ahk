@@ -1,4 +1,4 @@
-﻿#Persistent
+#Persistent
 #SingleInstance, Force
 SetKeyDelay, 0
 
@@ -7,6 +7,7 @@ global keylist := []
 global profilename := "Default"
 global profiledir := A_ScriptDir . "\profiles"
 global importdir := A_ScriptDir . "\imports"
+global macrodir := A_ScriptDir . "\macros"
 global settingsx := ""
 global settingsy := ""
 global statussize := "Small"
@@ -15,16 +16,22 @@ global settingsdir := A_ScriptDir . "\settings"
 global beepenabled := true
 global togglekey := "RControl"
 global statusvisible := true
+global macroprocess := 0
+global selectedmacro := "None"
+global macrolist := []
 FileCreateDir, %profiledir%
 FileCreateDir, %importdir%
 FileCreateDir, %settingsdir%
+FileCreateDir, %macrodir%
 
 defaultkeys := ["1","2","3","4","5","6","7","9","0","Q","T","G","Z","R","Y","C","=","-","CapsLock","Tab"]
 
 importoldscripts()
+loadmacrolist()
 loadlastprofile(defaultkeys)
 loadsettings()
 buildstatusbox()
+loadactivemacro()
 
 SetTimer, spamkeys, 10
 
@@ -38,6 +45,15 @@ togglemacro:
         GuiControl, Status:, statustext, ON
         if (beepenabled = 1)
             SoundBeep 800, 80
+        
+        if (selectedmacro != "None" and selectedmacro != "")
+        {
+            macropath := macrodir . "\" . selectedmacro . ".ahk"
+            if FileExist(macropath)
+            {
+                Run, %macropath%,, , macroprocess
+            }
+        }
     }
     else
     {
@@ -45,11 +61,24 @@ togglemacro:
         GuiControl, Status:, statustext, OFF
         if (beepenabled = 1)
             SoundBeep 600, 80
+        
+        if (macroprocess)
+        {
+            Process, Close, %macroprocess%
+            macroprocess := 0
+        }
+        else if (selectedmacro != "None" and selectedmacro != "")
+        {
+            DetectHiddenWindows, On
+            SetTitleMatchMode, 2
+            WinClose, %selectedmacro%.ahk
+            DetectHiddenWindows, Off
+        }
     }
     if (statusvisible = 1 or statusvisible = "1")
         Gui, Status:Show, NoActivate
     return
-
+    
 F12::ExitApp
 
 F10::
@@ -150,7 +179,7 @@ global rightbuttonpressed := false
     rightbuttonpressed := false
     return
     
-    global middlebuttonpressed := false
+global middlebuttonpressed := false
 
 *~MButton::
     middlebuttonpressed := true
@@ -185,6 +214,48 @@ global rightbuttonpressed := false
     middlebuttonpressed := false
     return
 
+loadmacrolist()
+{
+    global macrodir, macrolist
+    macrolist := []
+    macrolist.Push("None")
+    
+    Loop, Files, %macrodir%\*.ahk
+    {
+        name := RegExReplace(A_LoopFileName, "\.ahk$")
+        macrolist.Push(name)
+    }
+}
+
+getmacrodropdown()
+{
+    global macrolist, selectedmacro
+    list := ""
+    for index, name in macrolist
+    {
+        if (list != "")
+            list .= "|"
+        if (name = selectedmacro)
+            list .= name . "||"
+        else
+            list .= name
+    }
+    return list
+}
+
+loadactivemacro()
+{
+    global macrodir, selectedmacro
+    
+    if (selectedmacro = "None" or selectedmacro = "")
+        return
+    
+    macropath := macrodir . "\" . selectedmacro . ".ahk"
+    if FileExist(macropath)
+    {
+        #Include *i %A_ScriptDir%\macros\__active_macro.ahk
+    }
+}
 
 buildstatusbox()
 {
@@ -281,6 +352,8 @@ showsettingsgui:
     }
     Gui, Settings:Destroy
 
+    loadmacrolist()
+
     Gui, Settings:New, +AlwaysOnTop, Macro Settings
     Gui, Settings:Font, s10, Segoe UI
     Gui, Settings:Color, 1a1a2e
@@ -298,11 +371,22 @@ showsettingsgui:
     Gui, Settings:Add, Button, x395 y35 w60 h25 gdeleteprofile, Delete
 
     Gui, Settings:Font, s11 cWhite Bold
+    Gui, Settings:Add, Text, x15 y70, Macro:
+    Gui, Settings:Font, s10 cWhite Normal
+
+    macrodropdown := getmacrodropdown()
+    Gui, Settings:Add, DropDownList, x15 y95 w180 vselectedmacrodrop gmacrochanged, %macrodropdown%
+
+    Gui, Settings:Add, Button, x200 y95 w80 h25 gimportmacro, Import
+    Gui, Settings:Add, Button, x285 y95 w80 h25 gdeletemacro, Delete
+    Gui, Settings:Add, Button, x370 y95 w85 h25 gopenmacrofolder, Open Folder
+
+    Gui, Settings:Font, s11 cWhite Bold
     keycount := keylist.Length()
-    Gui, Settings:Add, Text, x15 y75, Active Keys (%keycount%):
+    Gui, Settings:Add, Text, x15 y135, Active Keys (%keycount%):
 
     Gui, Settings:Font, s11 cWhite Normal, Consolas
-    Gui, Settings:Add, ListView, x15 y100 w200 h280 vselectedkey Background1a1a2e cWhite -Hdr +LV0x10000, Key
+    Gui, Settings:Add, ListView, x15 y160 w200 h220 vselectedkey Background1a1a2e cWhite -Hdr +LV0x10000, Key
     for index, key in keylist
     {
         displayname := key
@@ -320,34 +404,94 @@ showsettingsgui:
     }
 
     Gui, Settings:Font, s10 cWhite Normal, Segoe UI
-    Gui, Settings:Add, Text, x230 y100, Add Key:
-    Gui, Settings:Add, Edit, x230 y125 w150 h25 vnewkeyinput,
-    Gui, Settings:Add, Button, x385 y125 w70 h25 gaddkey, Add
-    Gui, Settings:Add, Button, x230 y165 w225 h30 gremovekey, Remove Selected
-    Gui, Settings:Add, Button, x230 y205 w225 h30 gclearallkeys, Clear All
+    Gui, Settings:Add, Text, x230 y135, Add Key:
+    Gui, Settings:Add, Edit, x230 y160 w150 h25 vnewkeyinput,
+    Gui, Settings:Add, Button, x385 y160 w70 h25 gaddkey, Add
+    Gui, Settings:Add, Button, x230 y195 w225 h30 gremovekey, Remove Selected
+    Gui, Settings:Add, Button, x230 y235 w225 h30 gclearallkeys, Clear All
 
     Gui, Settings:Font, s11 cWhite Bold
-    Gui, Settings:Add, Text, x230 y250, Quick Add:
+    Gui, Settings:Add, Text, x230 y280, Quick Add:
     Gui, Settings:Font, s10 cWhite Normal
-    Gui, Settings:Add, Button, x230 y275 w55 h25 gquickadd1, 1-5
-    Gui, Settings:Add, Button, x290 y275 w55 h25 gquickadd2, 6-0
-    Gui, Settings:Add, Button, x350 y275 w55 h25 gquickadd3, QWER
-    Gui, Settings:Add, Button, x410 y275 w45 h25 gquickadd4, ZXCV
-    Gui, Settings:Add, Button, x230 y305 w55 h25 gaddlclick, LMB
-    Gui, Settings:Add, Button, x290 y305 w55 h25 gaddlrclick, RMB
-    Gui, Settings:Add, Button, x350 y305 w55 h25 gaddmclick, MMB
+    Gui, Settings:Add, Button, x230 y305 w55 h25 gquickadd1, 1-5
+    Gui, Settings:Add, Button, x290 y305 w55 h25 gquickadd2, 6-0
+    Gui, Settings:Add, Button, x350 y305 w55 h25 gquickadd3, QWER
+    Gui, Settings:Add, Button, x410 y305 w45 h25 gquickadd4, ZXCV
+    Gui, Settings:Add, Button, x230 y335 w55 h25 gaddlclick, LMB
+    Gui, Settings:Add, Button, x290 y335 w55 h25 gaddlrclick, RMB
+    Gui, Settings:Add, Button, x350 y335 w55 h25 gaddmclick, MMB
 
     Gui, Settings:Font, s10 cWhite Normal
-    Gui, Settings:Add, Text, x230 y340, Or press a key:
-    Gui, Settings:Add, Button, x230 y365 w225 h30 vcapturebtn gcapturekey, Click then press a key...
+    Gui, Settings:Add, Text, x230 y370, Or press a key:
+    Gui, Settings:Add, Button, x230 y395 w225 h30 vcapturebtn gcapturekey, Click then press a key...
 
     Gui, Settings:Add, Button, x15 y390 w200 h25 gimportnow, Re-scan Imports Folder
-    Gui, Settings:Add, Button, x230 y390 w225 h25 gshowdisplaysettings, Display Settings
+    Gui, Settings:Add, Button, x15 y420 w200 h25 gshowdisplaysettings, Display Settings
 
     if (settingsx != "")
-        Gui, Settings:Show, x%settingsx% y%settingsy% w470 h425, Macro Settings
+        Gui, Settings:Show, x%settingsx% y%settingsy% w470 h460, Macro Settings
     else
-        Gui, Settings:Show, w470 h425, Macro Settings
+        Gui, Settings:Show, w470 h460, Macro Settings
+    return
+
+macrochanged:
+    Gui, Settings:Submit, NoHide
+    if (selectedmacrodrop != "")
+    {
+        selectedmacro := selectedmacrodrop
+    }
+    return
+
+importmacro:
+    FileSelectFile, macrofile, 3, %A_ScriptDir%, Select Macro File, AutoHotkey Scripts (*.ahk)
+    if (macrofile != "")
+    {
+        SplitPath, macrofile, filename
+        destpath := macrodir . "\" . filename
+        
+        if FileExist(destpath)
+        {
+            forcealwaysontop()
+            MsgBox, 36, Overwrite?, A macro with that name already exists. Overwrite?
+            IfMsgBox No
+                return
+        }
+        
+        FileCopy, %macrofile%, %destpath%, 1
+        loadmacrolist()
+        selectedmacro := RegExReplace(filename, "\.ahk$")
+        GoSub, showsettingsgui
+        forcealwaysontop()
+        MsgBox, 64, Imported, Macro "%selectedmacro%" imported successfully.`n`nNote: Restart the script or reload profile to activate the macro.
+    }
+    return
+
+deletemacro:
+    Gui, Settings:Submit, NoHide
+    if (selectedmacrodrop = "None" or selectedmacrodrop = "")
+    {
+        forcealwaysontop()
+        MsgBox, 48, Error, No macro selected to delete.
+        return
+    }
+    
+    forcealwaysontop()
+    MsgBox, 36, Confirm, Delete macro "%selectedmacrodrop%"?
+    IfMsgBox Yes
+    {
+        macropath := macrodir . "\" . selectedmacrodrop . ".ahk"
+        FileDelete, %macropath%
+        
+        if (selectedmacro = selectedmacrodrop)
+            selectedmacro := "None"
+        
+        loadmacrolist()
+        GoSub, showsettingsgui
+    }
+    return
+
+openmacrofolder:
+    Run, explorer.exe %macrodir%
     return
 
 showdisplaysettings:
@@ -396,9 +540,9 @@ showdisplaysettings:
     else
         beeplist := "On|Off||"
 
-   Gui, Display:Add, DropDownList, x15 y170 w200 vbeepselect, %beeplist%
+    Gui, Display:Add, DropDownList, x15 y170 w200 vbeepselect, %beeplist%
 
-Gui, Display:Font, s11 cWhite Bold
+    Gui, Display:Font, s11 cWhite Bold
     Gui, Display:Add, Text, x15 y210, Show Indicator:
     Gui, Display:Font, s10 cWhite Normal
 
@@ -441,7 +585,7 @@ applydisplay:
         Hotkey, %togglekey%, togglemacro, On
         newtogglekey := ""
     }
-   savesettings()
+    savesettings()
     buildstatusbox()
     if (statusvisible = 1 or statusvisible = "1")
     {
@@ -463,7 +607,7 @@ closedisplay:
     Gui, Display:Destroy
     return
 
-    global newtogglekey := ""
+global newtogglekey := ""
 
 capturetogglekey:
     GuiControl, Display:, togglecapturebtn, Press any key now...
@@ -590,7 +734,7 @@ quickadd4:
     GoSub, showsettingsgui
     return
 
- addlclick:
+addlclick:
     quickaddkeys(["LButton"])
     GoSub, showsettingsgui
     return
@@ -768,6 +912,7 @@ deleteprofile:
         {
             profilename := "Default"
             keylist := []
+            selectedmacro := "None"
         }
         GoSub, showsettingsgui
     }
@@ -786,7 +931,7 @@ profilechanged:
 
 saveprofiletofile(name)
 {
-    global keylist, profiledir
+    global keylist, profiledir, selectedmacro
     filepath := profiledir . "\" . name . ".ini"
     FileDelete, %filepath%
 
@@ -799,14 +944,20 @@ saveprofiletofile(name)
     }
 
     IniWrite, %keystring%, %filepath%, Settings, Keys
+    IniWrite, %selectedmacro%, %filepath%, Settings, Macro
 }
 
 loadprofilefromfile(name)
 {
-    global keylist, profiledir
+    global keylist, profiledir, selectedmacro
     filepath := profiledir . "\" . name . ".ini"
 
     IniRead, keystring, %filepath%, Settings, Keys, %A_Space%
+    IniRead, selectedmacro, %filepath%, Settings, Macro, None
+    
+    if (selectedmacro = "ERROR" or selectedmacro = "")
+        selectedmacro := "None"
+    
     keylist := []
 
     if (keystring != "")
@@ -847,7 +998,7 @@ savelastprofile(name)
 
 loadlastprofile(defaultkeys)
 {
-    global profiledir, profilename, keylist
+    global profiledir, profilename, keylist, selectedmacro
     filepath := profiledir . "\__lastprofile.txt"
 
     FileRead, lastname, %filepath%
@@ -864,6 +1015,7 @@ loadlastprofile(defaultkeys)
 
     profilename := "Default"
     keylist := []
+    selectedmacro := "None"
     for index, key in defaultkeys
     {
         keylist.Push(key)
@@ -919,6 +1071,7 @@ importoldscripts()
                 keystring .= key
             }
             IniWrite, %keystring%, %profilepath%, Settings, Keys
+            IniWrite, None, %profilepath%, Settings, Macro
 
             processeddir := importdir . "\processed"
             FileCreateDir, %processeddir%

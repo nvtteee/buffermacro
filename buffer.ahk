@@ -15,6 +15,7 @@ global settingsdir := A_ScriptDir . "\settings"
 global beepenabled := true
 global togglekey := "RControl"
 global statusvisible := true
+global qkeypressed := false
 FileCreateDir, %profiledir%
 FileCreateDir, %importdir%
 FileCreateDir, %settingsdir%
@@ -63,7 +64,7 @@ spamkeys:
         {
             for index, key in keylist
             {
-                if (key = "LButton" or key = "RButton" or key = "MButton")
+                if (key = "LButton" or key = "RButton" or key = "MButton" or key = "Q")
                     continue
                 if (key = "CapsLock")
                     checkkey := "CapsLock"
@@ -183,6 +184,39 @@ global rightbuttonpressed := false
 
 *~MButton Up::
     middlebuttonpressed := false
+    return
+
+*~q::
+    qkeypressed := true
+    hasqkey := false
+    for index, key in keylist
+    {
+        if (key = "Q")
+        {
+            hasqkey := true
+            break
+        }
+    }
+    if (hasqkey)
+    {
+        while (qkeypressed)
+        {
+            IfWinActive, ahk_exe RobloxPlayerBeta.exe
+            {
+                if (togglekeys)
+                {
+                    Send {Blind}q
+                    Sleep, 10
+                }
+                else
+                    break
+            }
+        }
+    }
+    return
+
+*~q Up::
+    qkeypressed := false
     return
 
 
